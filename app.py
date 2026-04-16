@@ -10,10 +10,9 @@ UserInterface = gr.ChatInterface(
     title = 'Ask Craig',
     description = '''Ask questions about your local PDFs. 
     System will automatically verify facts via Web Search if local data is insufficient.''',
-    theme = 'soft',
     examples = ['What is the main argument in the uploaded PDF?', 'Summarize the latest trends mentioned.'],
     cache_examples = False,
 )
 
 if __name__ == "__main__":
-    UserInterface.launch(share=False)
+    UserInterface.launch(theme='soft', share=False)
