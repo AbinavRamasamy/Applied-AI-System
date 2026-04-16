@@ -1,14 +1,13 @@
 # Core AI and Environment
-google-generativeai>=0.7.0
-python-dotenv>=1.0.1
+google-genai>=1.73.1
+python-dotenv>=1.2.2
 
 # Web Interface
-# streamlit>=1.55.0
-# gradio>=6.12.0
+gradio>=6.12.0
 
 # Search Fallback
 tavily-python>=0.7.23
 
 # Vector Database & Processing
-pypdf>=4.1.0
-faiss-cpu>=1.8.0
+pypdf>=6.10.2
+faiss-cpu>=1.13.2
