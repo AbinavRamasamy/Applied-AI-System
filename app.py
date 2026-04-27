@@ -24,8 +24,5 @@ UserInterface = gr.ChatInterface(
 )
 
 if __name__ == "__main__":
-    UserInterface.launch(theme='soft', share=False,
-                        pwa=True, show_api=False,
-                        title='Ask Craig',
-                        # favicon_path="icon.png",
-                        )
+    UserInterface.launch(theme='soft', share=False, pwa=True,
+                        favicon_path="assets/icon.png")

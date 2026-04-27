@@ -2,63 +2,17 @@
 
 A Corrective RAG (CRAG) chatbot that answers questions from local PDFs and falls back to live web search when local documents are insufficient. It matters because standard RAG systems generate confident answers even when their retrieved context is irrelevant — Ask Craig adds an AI judge that detects this and reroutes to the web, so answers are always grounded in something real.
 
-## Original project
+## Project
 
-> **Project name:** [YOUR ORIGINAL PROJECT NAME]
-
-[2–3 sentences: what your original project did, what its goals and capabilities were, and what limitation this current project fixes.]
+> **Project name:** Ask Craig
 
 ## System diagram
-
-```mermaid
-flowchart TD
-    User(["User"])
-    PDFs[("data/*.pdf")]
-
-    subgraph ui["Web Interface"]
-        UI["Gradio Chat UI\napp.py"]
-    end
-
-    subgraph pipeline["CRAG Pipeline — main.py"]
-        direction TB
-        R["Retriever\nretriever.py\nchunk · embed · FAISS search"]
-        E{"Evaluator\nevaluator.py\nrelevant / irrelevant / ambiguous?"}
-        W["Web Search\nweb_tools.py"]
-        G["Generator\ngenerator.py"]
-    end
-
-    subgraph apis["External APIs"]
-        Gemini["Google Gemini\nembed + judge + generate"]
-        Tavily["Tavily Search API"]
-    end
-
-    subgraph testing["Testing — tests/"]
-        T["pytest\nunit tests per module\nall API calls mocked"]
-    end
-
-    User -- "question" --> UI
-    UI --> R
-    PDFs -- "indexed on startup" --> R
-    R -- "top-k chunks" --> E
-    E -- "relevant" --> G
-    E -- "irrelevant" --> W
-    E -- "ambiguous" --> W
-    E -- "ambiguous: local ctx" --> G
-    W -- "web snippets" --> G
-    G -- "answer" --> UI
-    UI -- "response" --> User
-
-    Gemini -. "embed chunks & query" .-> R
-    Gemini -. "judge relevance" .-> E
-    Gemini -. "generate answer" .-> G
-    Tavily -. "search results" .-> W
-
-    T -. "patches google_client\n& tavily_client" .-> pipeline
-```
-
-> You can also paste the block above into [mermaid.live](https://mermaid.live) to view and edit it interactively.
+![System diagram](assets/diagrams/system_diagram.png)
 
 The diagram has four main components. The **Retriever** splits PDFs into overlapping text chunks, embeds them with Gemini, and stores them in a FAISS vector index for fast similarity search. The **Evaluator** asks Gemini to read the retrieved chunks and return a single verdict — `relevant`, `irrelevant`, or `ambiguous` — which controls where the answer comes from. The **Web Search** module calls Tavily when local documents aren't sufficient. The **Generator** receives whichever context won the routing decision and produces the final answer. All of this is orchestrated by `main.py`, which also ensures the PDF index is built exactly once per session.
+
+## Screenshot
+![Project Showcase](assets/project_screenshot.png)
 
 ## How it works
 
@@ -69,38 +23,6 @@ The diagram has four main components. The **Retriever** splits PDFs into overlap
    - **Relevant** → answer from local documents only.
    - **Irrelevant** → answer from Tavily web search.
    - **Ambiguous** → answer from both sources combined.
-
-## Sample interactions
-
-These three examples show each routing path the pipeline can take.
-
-**Example 1 — Relevant: answered directly from local PDFs**
-
-> **Input:** "What is the main argument made in the uploaded paper?"
->
-> **Evaluator verdict:** `relevant`
->
-> **Output:** "Based on the document, the main argument is that transformer-based architectures outperform recurrent models on long-range dependency tasks because attention mechanisms can directly relate any two positions in a sequence regardless of distance. The paper supports this with experiments on three NLP benchmarks showing a 12–18% improvement in BLEU score over LSTM baselines. *(Source: local documents)*"
-
----
-
-**Example 2 — Irrelevant: answered from web search**
-
-> **Input:** "What were the top AI breakthroughs in 2025?"
->
-> **Evaluator verdict:** `irrelevant` — no uploaded PDF covers 2025 events.
->
-> **Output:** "According to current web sources, major 2025 AI developments include advances in mixture-of-experts scaling, multimodal reasoning models, and significant reductions in inference cost for large language models. Several frontier labs published technical reports showing reasoning benchmark improvements exceeding prior state-of-the-art by wide margins. *(Source: web search)*"
-
----
-
-**Example 3 — Ambiguous: local context supplemented by web**
-
-> **Input:** "How does FAISS compare to other vector databases for production use?"
->
-> **Evaluator verdict:** `ambiguous` — the PDF mentioned FAISS briefly but didn't compare alternatives.
->
-> **Output:** "Your document notes that FAISS is well-suited for in-memory nearest-neighbor search at small-to-medium scale. Supplementing with web sources: compared to managed databases like Pinecone or Weaviate, FAISS offers lower latency and no network overhead since it runs in-process, but lacks persistence, distributed scaling, and metadata filtering. For production workloads with millions of vectors, managed solutions typically add operational value that raw FAISS can't provide. *(Source: local documents + web search)*"
 
 ## Setup
 
@@ -177,19 +99,19 @@ requirements.txt
 ## Design decisions
 
 **Why add an evaluator instead of always using web search?**
-Always falling back to the web would ignore documents the user explicitly uploaded. Always trusting the local index would produce hallucinations when the question falls outside those documents. The evaluator makes the routing decision intelligently with a small added latency cost — one extra Gemini call per query.
+Always trusting local documents causes hallucinations when a question falls outside them; always using the web ignores files the user explicitly uploaded. The evaluator routes intelligently at the cost of one extra API call per query.
 
 **Why FAISS instead of a managed vector database?**
-FAISS runs entirely in-process with no infrastructure setup. Anyone can clone the repo, install requirements, and run it immediately. The trade-off is that the index lives in memory and is rebuilt on every startup. For a production system with thousands of documents, a persistent store like Chroma or Pinecone would be worth the added complexity.
+FAISS runs in-process with no setup. The trade-off is that the index is rebuilt from scratch each startup; a persistent store like Chroma would be worth it at a larger scale.
 
 **Why Gemini for both embedding and generation?**
-Using one provider for all AI calls simplifies key management and keeps the dependency surface small — one free-tier API key covers embedding, judging, and generating. The trade-off is vendor lock-in; swapping models requires changes in three separate files.
+One provider means one API key and a smaller dependency surface. The trade-off is vendor lock-in — swapping models requires edits in multiple files.
 
 **Why Gradio for the UI?**
-Gradio's `ChatInterface` gives a functional, shareable chat UI in ~10 lines of code and handles conversation history and example prompts without any frontend work. The trade-off is limited customization — advanced layouts or branding would require a full frontend framework.
+Gradio's `ChatInterface` delivers a working chat UI in ~10 lines with no frontend code. The trade-off is limited styling and layout control.
 
-**Why split the pipeline into five separate files?**
-Each module has one job, so each can be tested in isolation with mocked dependencies. The trade-off is more files to navigate initially, but it pays off when debugging: a failing test immediately points to exactly which stage of the pipeline broke.
+**Why split into five files?**
+Each module has one job and can be tested in isolation. A failing test points immediately to the broken pipeline stage.
 
 ## Running the tests
 
@@ -217,20 +139,24 @@ No API keys or PDF files are needed — every external call is mocked. The suite
 ## Reflection
 
 **Limitations and biases**
-The system's quality is only as good as the PDFs you give it. If those documents are outdated, one-sided, or written from a particular cultural or disciplinary perspective, the answers will reflect that without any warning to the user. The web search fallback introduces a different kind of bias: Tavily returns results ranked by its own relevance algorithm, so the system may consistently favor certain publishers or perspectives without the user knowing. There is also a language limitation — the embedding model and generation model both perform best in English, so multilingual documents or queries may return lower-quality results. Finally, the `ambiguous` routing path blends local and web context by simply concatenating them, with no mechanism to resolve contradictions between the two sources.
+The system is only as accurate as the PDFs it indexes — outdated or biased documents produce equally skewed answers with no warning to the user.
+Tavily's ranking silently favors certain sources, and the `ambiguous` path blends local and web context with no way to detect contradictions between them.
+Both models also perform best in English, so multilingual queries may return noticeably weaker results.
 
 **Potential for misuse**
-The most direct misuse would be pointing the system at documents containing misinformation and asking it to produce authoritative-sounding summaries of those claims. Because the system is designed to answer from what it retrieves, it will faithfully reproduce harmful content if that content is in the index. A second risk is using the web search fallback to automate large volumes of queries against Tavily at low cost, which could violate the API's terms of service. To mitigate these risks, a deployed version should add input and output filtering (content moderation before generation), rate limiting per user, and a clear disclaimer that answers should be verified before acting on them.
+Loading documents with false claims lets the system present misinformation as a confident, sourced answer.
+There is also no content moderation on inputs or outputs, so users can query sensitive topics without restriction.
+A deployed version should add output filtering and a disclaimer that answers need independent verification.
 
 **What surprised me during reliability testing**
-The evaluator's `ambiguous` verdict turned out to be much more common than expected. Questions that seemed clearly answerable from the uploaded documents were frequently classified as ambiguous because the relevant information was spread across multiple chunks rather than concentrated in one. This meant the system often triggered a web search unnecessarily, adding latency and sometimes pulling in web results that contradicted the document. It revealed that the chunk size and the top-k retrieval count are more important tuning parameters than they initially appeared.
+The `ambiguous` verdict activated far more often than expected — relevant information spread across multiple chunks was frequently misclassified, triggering unnecessary web searches.
+This added latency and occasionally pulled in web results that contradicted the uploaded document.
+It made clear that chunk size and top-k retrieval are more critical tuning parameters than they initially seemed.
 
 **Collaboration with AI during this project**
-AI assistance was used throughout this project for code structure, error handling, and the test suite.
-
-One instance where it was genuinely helpful: when setting up the pytest mocking strategy, AI suggested patching the client objects at the module level where they are *used* (e.g. `@patch("src.evaluator.google_client")`) rather than at the source where they are defined. This is the correct approach in Python because `patch` replaces the name in the namespace that imports it, not the original definition. Without that guidance, the mocks would not have intercepted the actual calls.
-
-One instance where its suggestion was flawed: AI initially generated `conftest.py` without the `sys.path.insert` line needed to make `src` importable. Every test failed with `ModuleNotFoundError: No module named 'src'` because pytest does not automatically add the project root to the Python path when tests live in a subdirectory. The fix was straightforward once the error was clear, but the omission meant the tests could not run at all until that line was added — a good reminder to always run generated code before trusting it.
+AI helped throughout with code structure, error handling, and building the test cases.
+One helpful suggestion: patch mocks at the module where a client is *used* (`@patch("src.evaluator.google_client")`), not where it's defined — otherwise the mock doesn't intercept the actual call.
+One flawed suggestion: the initial python test files were missing required modules, causing every test to fail with `ModuleNotFoundError` — a reminder to always run generated code before trusting it.
 
 ## Logging
 
