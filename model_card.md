@@ -110,3 +110,37 @@ This system does not train any models. It uses pre-trained models from Google Ge
 - For best results, use clean, text-based PDFs rather than scanned images
 - If the system consistently routes to web search for questions you expect the document to answer, the document may have poor text extraction — try a different PDF export tool
 - The system is designed for personal/educational use; a production deployment would require additional safety layers, persistent storage, and API cost management
+
+---
+
+## Testing summary
+
+**What worked well:** Mocking at the module level (`@patch("src.evaluator.google_client")`) made tests fast and fully deterministic — no real API calls, no flakiness, no keys required. Testing pure functions like `_chunk_text` required no mocking at all. The `conftest.py` approach of patching SDK constructors before any `src.*` import cleanly solved the problem of `clients.py` validating keys at import time.
+
+**What was tricky:** Getting the `conftest.py` import order right took iteration — `os.environ` must be set and the SDK constructors must be patched *before* any test file imports a `src.*` module, otherwise the real clients try to initialize. Also, `sys.path` had to be explicitly set because pytest doesn't automatically treat the project root as importable.
+
+**What isn't tested:** The Gradio UI layer is not covered — verifying the chat interface renders correctly requires a browser. End-to-end integration tests with live API calls are also absent; the mock-based unit tests verify logic but not that the APIs return usable responses in practice.
+
+---
+
+## Reflection
+
+**Limitations and biases**
+The system is only as accurate as the PDFs it indexes — outdated or biased documents produce equally skewed answers with no warning to the user.
+Tavily's ranking silently favors certain sources, and the `ambiguous` path blends local and web context with no way to detect contradictions between them.
+Both models also perform best in English, so multilingual queries may return noticeably weaker results.
+
+**Potential for misuse**
+Loading documents with false claims lets the system present misinformation as a confident, sourced answer.
+There is also no content moderation on inputs or outputs, so users can query sensitive topics without restriction.
+A deployed version should add output filtering and a disclaimer that answers need independent verification.
+
+**What surprised me during reliability testing**
+The `ambiguous` verdict activated far more often than expected — relevant information spread across multiple chunks was frequently misclassified, triggering unnecessary web searches.
+This added latency and occasionally pulled in web results that contradicted the uploaded document.
+It made clear that chunk size and top-k retrieval are more critical tuning parameters than they initially seemed.
+
+**Collaboration with AI during this project**
+AI helped throughout with code structure, error handling, and building the test cases.
+One helpful suggestion: patch mocks at the module where a client is *used* (`@patch("src.evaluator.google_client")`), not where it's defined — otherwise the mock doesn't intercept the actual call.
+One flawed suggestion: the initial python test files were missing required modules, causing every test to fail with `ModuleNotFoundError`. This reminded me to always run generated code before trusting it.
