@@ -6,9 +6,7 @@ A Corrective RAG (CRAG) chatbot that answers questions from local PDFs and falls
 
 > **Project name:** Music Recommender Simulation
 
-# Current Project
-
-## System diagram
+## Current System diagram
 ![System diagram](assets/diagrams/system_diagram.png)
 
 The diagram has four main components. The **Retriever** splits PDFs into overlapping text chunks, embeds them with Gemini, and stores them in a FAISS vector index for fast similarity search. The **Evaluator** asks Gemini to read the retrieved chunks and return a single verdict — `relevant`, `irrelevant`, or `ambiguous` — which controls where the answer comes from. The **Web Search** module calls Tavily when local documents aren't sufficient. The **Generator** receives whichever context won the routing decision and produces the final answer. All of this is orchestrated by `main.py`, which also ensures the PDF index is built exactly once per session.
