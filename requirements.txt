@@ -11,3 +11,7 @@ tavily-python>=0.7.23
 # Vector Database & Processing
 pypdf>=6.10.2
 faiss-cpu>=1.13.2
+numpy>=2.4.4
+
+# Testing
+pytest>=9.0.3
